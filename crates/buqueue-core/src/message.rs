@@ -71,7 +71,7 @@ pub struct Message {
     /// - SQS FIFO: mapped to `MEssageDedpulicationID`
     /// - Kafka: used as the idempotent producer key when idempotent is enabled
     /// - Others: storead as the `bq-dedup-id` header - your consumer can read it and
-    /// `implement` application level deduplication manually
+    ///   `implement` application level deduplication manually
     pub(crate) deduplication_id: Option<String>,
 }
 
@@ -126,7 +126,7 @@ impl Message {
     /// This is the most common pattern in event-driven systems:
     ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - serialization to JSON fails.
     /// - build returns an error
@@ -152,7 +152,6 @@ impl Message {
             .header("content-type", "application/json")
             .build()
     }
-
 
     /// Returns the raw payload bytes
     pub fn payload(&self) -> &Bytes {
@@ -180,9 +179,9 @@ impl Message {
     }
 
     /// Adds a deduplication ID to this message, consuming and returning it
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if the ID is an empty string.
     ///
     /// Userful for chaining after `Message::from_json_with_key`
@@ -209,7 +208,7 @@ impl Message {
     /// Adds or overwirtes a header on this message, consuming and returning it
     ///
     /// # Errors
-    /// 
+    ///
     /// Validates the key the same way the builder does — returns an error
     /// if the key is empty or starts with the reserved `bq-` prefix.
     ///
@@ -223,7 +222,11 @@ impl Message {
     ///     .with_header("retry-count", "3")
     ///     .unwrap();
     /// ```
-    pub fn with_header(mut self, key: impl Into<String>, value: impl Into<String>) -> BuqueueResult<Self> {
+    pub fn with_header(
+        mut self,
+        key: impl Into<String>,
+        value: impl Into<String>,
+    ) -> BuqueueResult<Self> {
         let key = key.into();
         let value = value.into();
         validate_header_key(&key)?;
@@ -238,8 +241,8 @@ const RESERVED_HEADER_PREFIX: &str = "bq-";
 fn validate_header_key(key: &str) -> BuqueueResult<()> {
     if key.is_empty() {
         return Err(BuqueueError::new(ErrorKind::InvalidConfig(
-            "header key must not be empty".into()
-        )))
+            "header key must not be empty".into(),
+        )));
     }
 
     if key.starts_with(RESERVED_HEADER_PREFIX) {
@@ -326,9 +329,9 @@ impl MessageBulder {
     }
 
     /// Validate and Finalise the builder and return the `Message`
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns Error if:
     /// - No payload was set or the payload is empty
     /// - Any header key is empty
@@ -337,15 +340,21 @@ impl MessageBulder {
     /// - The deduplication ID is an empty string
     pub fn build(self) -> BuqueueResult<Message> {
         let payload = match self.payload {
-            None => return Err(BuqueueError::new(ErrorKind::InvalidConfig(
-                "payload must be set before calling build() - \
-                call .payload(bytes) on the builder".into()
-            ))),
-            Some(p) if p.is_empty() => return Err(BuqueueError::new(ErrorKind::InvalidConfig(
-                "payload must not be empty - \
+            None => {
+                return Err(BuqueueError::new(ErrorKind::InvalidConfig(
+                    "payload must be set before calling build() - \
+                call .payload(bytes) on the builder"
+                        .into(),
+                )));
+            }
+            Some(p) if p.is_empty() => {
+                return Err(BuqueueError::new(ErrorKind::InvalidConfig(
+                    "payload must not be empty - \
                 if you need a zero-byte signal message, use a 1-bytes payload \
-                or envode intent in a header instead".into()
-            ))),
+                or envode intent in a header instead"
+                        .into(),
+                )));
+            }
             Some(p) => p,
         };
 
@@ -354,12 +363,14 @@ impl MessageBulder {
             validate_header_value(value, key)?;
         }
 
-        if let Some(ref id) = self.deduplication_id && id.is_empty() {
+        if let Some(ref id) = self.deduplication_id
+            && id.is_empty()
+        {
             return Err(BuqueueError::new(ErrorKind::InvalidConfig(
                 "deduplication_id must not be empty".into(),
             )));
         }
-        
+
         Ok(Message {
             payload,
             headers: self.headers,
@@ -369,13 +380,15 @@ impl MessageBulder {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
-    struct TestEvent { id: u32, name: String }
+    struct TestEvent {
+        id: u32,
+        name: String,
+    }
 
     #[test]
     fn builder_sets_all_fields() {
@@ -397,16 +410,24 @@ mod tests {
 
     #[test]
     fn from_json_sets_content_type() {
-        let msg = Message::from_json(&TestEvent {id: 1, name: "test".into() }).unwrap();
+        let msg = Message::from_json(&TestEvent {
+            id: 1,
+            name: "test".into(),
+        })
+        .unwrap();
         assert_eq!(msg.header("content-type"), Some("application/json"));
     }
 
     #[test]
     fn from_json_with_key_sets_routing_key() {
         let msg = Message::from_json_with_key(
-            &TestEvent {id: 1, name: "test".into()}, 
-            "orders.placed"
-        ).unwrap();
+            &TestEvent {
+                id: 1,
+                name: "test".into(),
+            },
+            "orders.placed",
+        )
+        .unwrap();
 
         assert_eq!(msg.routing_key(), Some("orders.placed"));
         assert_eq!(msg.header("content-type"), Some("application/json"));
@@ -486,7 +507,7 @@ mod tests {
         assert!(matches!(err.kind, ErrorKind::InvalidConfig(_)));
         assert!(err.to_string().contains("must not be empty"));
     }
- 
+
     #[test]
     fn with_header_rejects_reserved_prefix() {
         let msg = Message::builder()
@@ -505,9 +526,12 @@ mod tests {
             .build()
             .unwrap_err();
         assert!(matches!(err.kind, ErrorKind::InvalidConfig(_)));
-        assert!(err.to_string().contains("deduplication_id must not be empty"));
+        assert!(
+            err.to_string()
+                .contains("deduplication_id must not be empty")
+        );
     }
- 
+
     #[test]
     fn with_deduplication_id_rejects_empty() {
         let msg = Message::builder()
