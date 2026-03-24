@@ -22,11 +22,11 @@
 //! intentional crash safety, but always call `nack()` explicitly so the
 //! delivery count increments correctly
 
-use std::{collections::HashMap, pin::Pin, sync::Arc};
+use crate::error::{BuqueueError, BuqueueResult, ErrorKind};
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use serde::de::DeserializeOwned;
-use crate::error::{BuqueueError, BuqueueResult, ErrorKind};
+use std::{collections::HashMap, pin::Pin, sync::Arc};
 
 /// A message received from a queue, ready to be processed and acknowledged.
 #[derive(Debug)]
@@ -34,10 +34,10 @@ pub struct Delivery {
     pub(crate) payload: Bytes,
     pub(crate) headers: HashMap<String, String>,
     pub(crate) routing_key: Option<String>,
-    #[allow(clippy::struct_field_names)]
-    pub(crate) delivery_count: u32,
     pub(crate) first_delivered_at: Option<DateTime<Utc>>,
     pub(crate) ack_handle: Arc<dyn AckHandle>,
+    #[allow(clippy::struct_field_names)]
+    pub(crate) delivery_count: u32,
 }
 
 impl Delivery {
@@ -48,9 +48,16 @@ impl Delivery {
         routing_key: Option<String>,
         delivery_count: u32,
         first_delivered_at: Option<DateTime<Utc>>,
-        ack_handle: Arc<dyn AckHandle>
+        ack_handle: Arc<dyn AckHandle>,
     ) -> Self {
-        Self { payload, headers, routing_key, delivery_count, first_delivered_at, ack_handle }
+        Self {
+            payload,
+            headers,
+            routing_key,
+            delivery_count,
+            first_delivered_at,
+            ack_handle,
+        }
     }
 
     /// Return the raw payload bytes
@@ -61,7 +68,7 @@ impl Delivery {
     /// Deserialise the payload as JSON into the type `T`
     ///
     /// # Errors
-    /// 
+    ///
     /// Returns `ErrorKind::DeserializationFailed` if the bytes are not valid
     /// JSON or the schema deosn't match. Check `schema-version` header if you
     /// version your events
@@ -72,9 +79,9 @@ impl Delivery {
     }
 
     /// Returns the payload as a UTF-8 string slice
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns `ErrorKind::DeserializationFailed` if the bytes are not valid
     /// UTF-8.
     pub fn payload_str(&self) -> BuqueueResult<&str> {
@@ -89,7 +96,7 @@ impl Delivery {
     }
 
     /// Returns all headers.
-    pub fn headers(&self) -> &HashMap<String, String>{
+    pub fn headers(&self) -> &HashMap<String, String> {
         &self.headers
     }
 
@@ -111,7 +118,7 @@ impl Delivery {
     }
 
     /// Return `true` if this is not the first delivery attempt
-    /// 
+    ///
     /// Log a warning when this is true, your handler should be idempotent
     pub fn is_redelivery(&self) -> bool {
         self.delivery_count > 1
@@ -120,9 +127,9 @@ impl Delivery {
     /// Acknowledge: tell the broker this message was processed successfully
     ///
     /// # Errors
-    /// 
+    ///
     /// Return error from emited by backend
-    /// 
+    ///
     /// The broker will not redeliver it
     pub async fn ack(self) -> BuqueueResult<()> {
         self.ack_handle.ack().await
@@ -131,16 +138,15 @@ impl Delivery {
     /// Negatively acknowledge: tell the broker this message was not processed.
     ///
     /// # Errors
-    /// 
+    ///
     /// Return error from emited by backend
-    /// 
+    ///
     /// The broker will redeliver it, or route it to the DLQ if
     /// `max_receive_count` has been reached.
     pub async fn nack(self) -> BuqueueResult<()> {
         self.ack_handle.nack().await
     }
 }
-
 
 /// Internal trait implemeted by each backend to communicate ack/nack to the broker
 ///
@@ -165,14 +171,14 @@ mod tests {
     #[derive(Debug)]
     struct SpyAckHandle {
         acked: AtomicBool,
-        nacked: AtomicBool
+        nacked: AtomicBool,
     }
 
     impl SpyAckHandle {
         fn new() -> Arc<Self> {
             Arc::new(Self {
                 acked: AtomicBool::new(false),
-                nacked: AtomicBool::new(false)
+                nacked: AtomicBool::new(false),
             })
         }
     }
@@ -191,12 +197,12 @@ mod tests {
 
     fn make_delivery(handle: Arc<dyn AckHandle>) -> Delivery {
         Delivery::new(
-            Bytes::from_static(b"{\"id\":1}"), 
+            Bytes::from_static(b"{\"id\":1}"),
             HashMap::new(),
-            Some("orders.placed".into()), 
+            Some("orders.placed".into()),
             1,
             None,
-            handle
+            handle,
         )
     }
 
@@ -219,7 +225,9 @@ mod tests {
     #[tokio::test]
     async fn payload_json_decode() {
         #[derive(Debug, serde::Deserialize, PartialEq)]
-        struct E { id: u32 }
+        struct E {
+            id: u32,
+        }
         let event: E = make_delivery(SpyAckHandle::new()).payload_json().unwrap();
         assert_eq!(event, E { id: 1 });
     }
@@ -231,6 +239,9 @@ mod tests {
 
     #[test]
     fn routing_key_accessible() {
-        assert_eq!(make_delivery(SpyAckHandle::new()).routing_key(), Some("orders.placed"));
+        assert_eq!(
+            make_delivery(SpyAckHandle::new()).routing_key(),
+            Some("orders.placed")
+        );
     }
 }

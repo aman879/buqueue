@@ -33,6 +33,7 @@
 
 #![warn(unsafe_code)]
 
+pub mod delivery;
 pub mod error;
 pub mod message;
-pub mod delivery;
+pub mod producer;
