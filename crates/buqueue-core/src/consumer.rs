@@ -161,6 +161,23 @@ pub trait QueueConsumer: Send {
             Some((item, consumer))
         })
     }
+
+    /// Erase this consumer's concrete type, returning a `DynConsumer`
+    ///
+    /// Use this when you need to:
+    /// - Store a consumer in a struct without a generic parameter
+    /// - Select a backend at runtime and store the result uniformly
+    /// - Return a consumer from a function without exposing the backend type
+    ///
+    /// ```rust,ignore
+    /// let consumer: DynConsumer = SqsConsumer::new(config).await?.into_dyn();
+    /// ```
+    fn into_dyn<'a>(self) -> BaseDynConsumer<'a>
+    where
+        Self: Sized + 'a,
+    {
+        BaseDynConsumer::new(self)
+    }
 }
 
 // ------- ref_delegate! ------------------------
@@ -235,26 +252,26 @@ pub(crate) trait ErasedQueueConsumer: Send {
 // --- DynConsumerInner ------------------
 
 struct DynConsumerInner<C> {
-    inner: C
+    inner: C,
 }
 
-impl <C: QueueConsumer> ErasedQueueConsumer for DynConsumerInner<C> {
+impl<C: QueueConsumer> ErasedQueueConsumer for DynConsumerInner<C> {
     fn receive<'a>(
-            &'a mut self,
-        ) -> Pin<Box<dyn Future<Output = BuqueueResult<Delivery>> + Send + 'a>> {
+        &'a mut self,
+    ) -> Pin<Box<dyn Future<Output = BuqueueResult<Delivery>> + Send + 'a>> {
         Box::pin(self.inner.receive())
     }
 
     fn try_receive<'a>(
-            &'a mut self,
-        ) -> Pin<Box<dyn Future<Output = BuqueueResult<Option<Delivery>>> + Send + 'a>> {
+        &'a mut self,
+    ) -> Pin<Box<dyn Future<Output = BuqueueResult<Option<Delivery>>> + Send + 'a>> {
         Box::pin(self.inner.try_receive())
     }
 
     fn receive_batch<'a>(
-            &'a mut self,
-            max: usize,
-        ) -> Pin<Box<dyn Future<Output = BuqueueResult<Vec<Delivery>>> + Send + 'a>> {
+        &'a mut self,
+        max: usize,
+    ) -> Pin<Box<dyn Future<Output = BuqueueResult<Vec<Delivery>>> + Send + 'a>> {
         Box::pin(self.inner.receive_batch(max))
     }
 
@@ -263,12 +280,11 @@ impl <C: QueueConsumer> ErasedQueueConsumer for DynConsumerInner<C> {
     }
 
     fn receive_graceful<'a>(
-            &'a mut self,
-        ) -> Pin<Box<dyn Future<Output = Option<BuqueueResult<Delivery>>> + Send + 'a>> {
+        &'a mut self,
+    ) -> Pin<Box<dyn Future<Output = Option<BuqueueResult<Delivery>>> + Send + 'a>> {
         Box::pin(self.inner.receive_graceful())
     }
 }
-
 
 // ---- BaseDynConsumer / DynConsumer ----------------------
 
@@ -286,7 +302,7 @@ pub struct BaseDynConsumer<'a>(Box<dyn ErasedQueueConsumer + 'a>);
 /// ```
 pub type DynConsumer = BaseDynConsumer<'static>;
 
-impl <'a> BaseDynConsumer<'a> {
+impl<'a> BaseDynConsumer<'a> {
     fn new(inner: impl QueueConsumer + 'a) -> Self {
         Self(Box::new(DynConsumerInner { inner }))
     }

@@ -1,15 +1,13 @@
 //! Graceful shutdown signalling for consumers.
 //!
 //! A `ShutdownHandle` is returned by `QueueConsumer::shutdown_handle()`.
-//! Call `ShutdownHandle::shutdown()` from a SIGTERM handler to signal the 
+//! Call `ShutdownHandle::shutdown()` from a SIGTERM handler to signal the
 //! consumer to drain and stop.
 
 use std::sync::Arc;
-
 use tokio::sync::watch;
 
-
-/// A handle that signal a consumer to shutdown gracefully
+// / A handle that signal a consumer to shutdown gracefully
 ///
 /// Cloneable, you can send copies to multipler tasks.
 /// When any copy calls `shutdown()`[(`Self::shutdown`)], all consumers
@@ -24,7 +22,7 @@ use tokio::sync::watch;
 ///     tokio::signal::ctrl_c().await.unwrap();
 ///     shutdown.shutdown().await;
 /// });
-/// 
+///
 /// while let Some(delivery) = consumer.receive_graceful().await {
 ///     // process...
 /// }
@@ -59,10 +57,10 @@ impl ShutdownHandle {
     #[must_use]
     pub fn new() -> Self {
         let (tx, rx) = watch::channel(false);
-        Self { 
-            inner:  Arc::new(ShutdownInner { 
-                sender: tx, 
-                receiver: rx, 
+        Self {
+            inner: Arc::new(ShutdownInner {
+                sender: tx,
+                receiver: rx,
             }),
         }
     }
@@ -113,7 +111,6 @@ impl Default for ShutdownHandle {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -146,7 +143,7 @@ mod tests {
 
         // This will hang forever if shutdown is never signaled
         tokio::time::timeout(
-            tokio::time::Duration::from_millis(500), 
+            tokio::time::Duration::from_millis(500),
             handle.wait_for_shutdown(),
         )
         .await
