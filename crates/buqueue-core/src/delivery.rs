@@ -34,10 +34,10 @@ pub struct Delivery {
     pub(crate) payload: Bytes,
     pub(crate) headers: HashMap<String, String>,
     pub(crate) routing_key: Option<String>,
-    #[allow(clippy::struct_field_names)]
-    pub(crate) delivery_count: u32,
     pub(crate) first_delivered_at: Option<DateTime<Utc>>,
     pub(crate) ack_handle: Arc<dyn AckHandle>,
+    #[allow(clippy::struct_field_names)]
+    pub(crate) delivery_count: u32,
 }
 
 impl Delivery {
@@ -54,9 +54,9 @@ impl Delivery {
             payload,
             headers,
             routing_key,
-            delivery_count,
             first_delivered_at,
             ack_handle,
+            delivery_count,
         }
     }
 
