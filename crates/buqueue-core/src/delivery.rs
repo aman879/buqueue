@@ -54,9 +54,9 @@ impl Delivery {
             payload,
             headers,
             routing_key,
-            delivery_count,
             first_delivered_at,
             ack_handle,
+            delivery_count,
         }
     }
 
