@@ -33,8 +33,10 @@
 
 #![warn(unsafe_code)]
 
+pub mod backend;
 pub mod consumer;
 pub mod delivery;
+pub mod dlq;
 pub mod error;
 pub mod message;
 pub mod producer;
