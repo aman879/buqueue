@@ -12,7 +12,7 @@ pub use crate::core::error::{BuqueueError, BuqueueResult, ErrorKind};
 pub use crate::core::message::{Message, MessageBulder};
 
 // Traits
-pub use crate::traits::backend::{BackendBuilder, QueueBackend};
+pub use crate::traits::backend::{BackendBuilder, DynamicBuilder};
 pub use crate::traits::consumer::{DynConsumer, QueueConsumer};
 pub use crate::traits::producer::{DynProducer, MessageId, QueueProducer};
 
