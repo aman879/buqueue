@@ -1,10 +1,7 @@
 //! The `QueueBackend` and `BackendBuilder` traits
 
-use crate::{
-    consumer::{DynConsumer, QueueConsumer},
-    dlq::DlqConfig,
-    error::BuqueueResult,
-    producer::{DynProducer, QueueProducer},
+use crate::prelude::{
+    BuqueueResult, DlqConfig, DynConsumer, DynProducer, QueueConsumer, QueueProducer,
 };
 
 /// A backend that can produce and consume messages

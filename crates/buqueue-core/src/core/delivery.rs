@@ -22,7 +22,7 @@
 //! intentional crash safety, but always call `nack()` explicitly so the
 //! delivery count increments correctly
 
-use crate::error::{BuqueueError, BuqueueResult, ErrorKind};
+use crate::prelude::{BuqueueError, BuqueueResult, ErrorKind};
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use serde::de::DeserializeOwned;
