@@ -1,12 +1,12 @@
 //! The `QueueBackend` and `BackendBuilder` traits
-//! 
+//!
 //! In buqueue each backend exposes `builder()` as a plain inherent method:
 //!
 //! ```rust,ignore
 //! impl SqsBackend {
 //!     pub fn builder(config: SqsConfig) -> SqsBuilder { ... }
 //! }
-//! 
+//!
 //! SqsBackend::builder(cfg).build_pair().await?;
 //! ```
 
@@ -14,11 +14,10 @@ use crate::prelude::{
     BuqueueResult, DlqConfig, DynConsumer, DynProducer, QueueConsumer, QueueProducer,
 };
 
-
 /// Fluent builder for constructing a backend's producer and/or consumer
 ///
 /// Each backend returns its own concrete builder from an inherent `builder()`
-/// method. This trait is what you write generic code 
+/// method. This trait is what you write generic code
 ///
 /// ```rust,ignore
 /// async fn build_test_pair<B>(builder:B) -> (B::Producer, B::Consumer)
@@ -37,7 +36,7 @@ use crate::prelude::{
 ///   [`QueueProducer`]. For [`DynamicBuilder`] this is [`DynProducer`], which
 ///   does not implement `QueueProducer`, it is aready-erased end product
 ///
-/// - `Consumer` - same reasonning as `Producer` 
+/// - `Consumer` - same reasonning as `Producer`
 pub trait BackendBuilder: Sized + Send {
     /// Concrete producer type producer by this builder
     type Producer: Send + 'static;
