@@ -1,34 +1,42 @@
 //! The `QueueBackend` and `BackendBuilder` traits
+//!
+//! In buqueue each backend exposes `builder()` as a plain inherent method:
+//!
+//! ```rust,ignore
+//! impl SqsBackend {
+//!     pub fn builder(config: SqsConfig) -> SqsBuilder { ... }
+//! }
+//!
+//! SqsBackend::builder(cfg).build_pair().await?;
+//! ```
 
 use crate::prelude::{
     BuqueueResult, DlqConfig, DynConsumer, DynProducer, QueueConsumer, QueueProducer,
 };
 
-/// A backend that can produce and consume messages
+/// Fluent builder for constructing a backend's producer and/or consumer
 ///
-/// Every buqueue backend implements this trait. The pattern is:
+/// Each backend returns its own concrete builder from an inherent `builder()`
+/// method. This trait is what you write generic code
 ///
 /// ```rust,ignore
-/// let(producer, consumer) = MyBackend::builder(config)
-///     .dead_letter_queue(dlq_config)
-///     .build_pair()
-///     .await?;
+/// async fn build_test_pair<B>(builder:B) -> (B::Producer, B::Consumer)
+/// where
+///     B: BackendBuilder,
+///     B::Producer: QueueProcuder,
+///     B::Consumer: QueueConsumer,
+/// {
+///     builder.build_pair().await.unwrap()
+/// }
 /// ```
-pub trait QueueBackend: Sized {
-    /// Backend-specific configuration type (e.g. `KafkaConfig`, `SqsConfig`)
-    type Config;
-    /// Concrete producer type
-    type Producer: QueueProducer + 'static;
-    /// Concrete consumer type
-    type Consumer: QueueConsumer + 'static;
-    /// Builder type returned by `builder()`
-    type Builder: BackendBuilder<Producer = Self::Producer, Consumer = Self::Consumer>;
-
-    /// Start configuring the backend
-    fn builder(config: Self::Config) -> Self::Builder;
-}
-
-/// Fluent builder returned by `QueueBackend::builder()`
+///
+/// ## Type parameters
+///
+/// - `Producer` - `Send + 'static` only. For conrete builders this implements
+///   [`QueueProducer`]. For [`DynamicBuilder`] this is [`DynProducer`], which
+///   does not implement `QueueProducer`, it is aready-erased end product
+///
+/// - `Consumer` - same reasonning as `Producer`
 pub trait BackendBuilder: Sized + Send {
     /// Concrete producer type producer by this builder
     type Producer: Send + 'static;
@@ -36,6 +44,9 @@ pub trait BackendBuilder: Sized + Send {
     type Consumer: Send + 'static;
 
     /// Configure a dead letter queue
+    ///
+    /// Message nack'd `max_receive_count` times are routed to `destination`
+    /// instead of being requeued
     #[must_use]
     fn dead_letter_queue(self, config: DlqConfig) -> Self;
 
