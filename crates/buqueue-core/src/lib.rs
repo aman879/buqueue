@@ -33,5 +33,14 @@
 
 pub mod core;
 pub mod feature;
-pub mod traits;
 pub mod prelude;
+pub mod traits;
+
+pub use core::delivery;
+pub use core::error;
+pub use core::message;
+pub use feature::dlq;
+pub use feature::shutdown;
+pub use traits::backend;
+pub use traits::consumer;
+pub use traits::producer;

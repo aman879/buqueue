@@ -3,7 +3,6 @@
 //! Pass a `DlqConfig` to any backend builder bia `.dead_letter_queue(config)`
 //! to enable automatic routing of failed messages to a dead letter destination
 
-
 /// Configuration for Dlq behavior
 ///
 /// When a message has been delivered and nack'd `max_receive_count` times,
@@ -47,14 +46,17 @@ pub struct DlqConfig {
 impl DlqConfig {
     /// Creates a new `DlqConfig`.
     ///
-    /// # Panics 
+    /// # Panics
     /// if `max_receive_count` is less than 1
     #[must_use]
     pub fn new(destination: String, max_receive_count: u32) -> Self {
-        assert!(max_receive_count >=1, "max_receive_count must be at least 1");
+        assert!(
+            max_receive_count >= 1,
+            "max_receive_count must be at least 1"
+        );
         Self {
             destination,
-            max_receive_count
+            max_receive_count,
         }
     }
 }
