@@ -10,15 +10,12 @@
 //! All traits use **native async function in traits** (AFIT)
 //! The `async-trait` proc-macro create is not used anywhere in buqueue
 //!
-//! ## What lives here
+//! ## Module structure
 //!
-//! - `Message`: the type you send into a queue
-//! - `Delivery`: the type you receive from a queue
-//! - `QueueProducer` - the trait for sending messages
-//! - `QueueConsumer` - the trait for receiving messages
-//! - `QueueBackend` - the trait that ties a backend's config to its producer and consumer types
-//! - `DlqConfig` - dead letter queue configuration
-//! - `BuqueueError` and `ErrorKind` - structured error types
+//! - [`core`]: fundamental types: `Message`, `Delivery`, errors
+//! - [`traits`]: abstractions backends implement: `QueueProducer`, `QueueConsumer`, `QueueBackend`
+//! - [`feature`]: opt-in behaviours: `DlqConfig`, `ShutdownHandle`
+//! - [`prelude`]: everything a typical user needs in one glob import
 //!
 //! ## For backend implementors
 //!
@@ -31,11 +28,19 @@
 //!
 //! Then implement `QueueProducer`, `QueueConsumer` and `QueueBackend` for your backend types
 
-#![warn(unsafe_code)]
+#![warn(missing_docs)]
+#![forbid(unsafe_code)]
 
-pub mod consumer;
-pub mod delivery;
-pub mod error;
-pub mod message;
-pub mod producer;
-pub mod shutdown;
+pub mod core;
+pub mod feature;
+pub mod prelude;
+pub mod traits;
+
+pub use core::delivery;
+pub use core::error;
+pub use core::message;
+pub use feature::dlq;
+pub use feature::shutdown;
+pub use traits::backend;
+pub use traits::consumer;
+pub use traits::producer;

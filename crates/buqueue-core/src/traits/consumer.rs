@@ -27,7 +27,7 @@ use std::pin::Pin;
 
 use futures::{Stream, stream};
 
-use crate::{delivery::Delivery, error::BuqueueResult, shutdown::ShutdownHandle};
+use crate::prelude::{BuqueueResult, Delivery, ShutdownHandle};
 
 // -------- QueueConsumer ------------------------------
 

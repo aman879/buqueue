@@ -33,7 +33,7 @@ use bytes::Bytes;
 use serde::Serialize;
 use std::collections::HashMap;
 
-use crate::error::{BuqueueError, BuqueueResult, ErrorKind};
+use crate::prelude::{BuqueueError, BuqueueResult, ErrorKind};
 
 /// A message to be sent into a queue
 ///

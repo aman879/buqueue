@@ -4,7 +4,7 @@
 //!
 //! Uses native async function in traits, no `#[async_trait]` proc-macro
 
-use crate::{error::BuqueueResult, message::Message};
+use crate::prelude::{BuqueueResult, Message};
 use chrono::{DateTime, Utc};
 use std::{future::Future, pin::Pin, sync::Arc};
 
