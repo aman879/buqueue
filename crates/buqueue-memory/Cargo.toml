@@ -1,0 +1,16 @@
+[package]
+name = "buqueue-memory"
+version = "0.1.0"
+edition.workspace = true
+description = "In-Memory backend for the buqueue"
+license = "MIT"
+
+[dependencies]
+buqueue-core = { workspace = true }
+tokio = { workspace = true }
+bytes = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+
+[lints]
+workspace = true
