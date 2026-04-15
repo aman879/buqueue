@@ -12,7 +12,6 @@ use tokio::sync::{Mutex, mpsc};
 /// - `nack()`: requeues with an incremented delivery count, or routes
 ///   to the DLQ once `max_receive_count` is reached
 #[derive(Debug)]
-#[allow(dead_code)]
 pub(crate) struct MemoryAckHandle {
     pub(crate) envelope: Envelope,
     pub(crate) requeue_tx: mpsc::Sender<Envelope>,

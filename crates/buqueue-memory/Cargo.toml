@@ -11,6 +11,8 @@ tokio = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
+tokio-test = { workspace = true }
+futures = { workspace = true }
 
 [lints]
 workspace = true

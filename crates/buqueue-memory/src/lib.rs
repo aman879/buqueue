@@ -17,8 +17,8 @@
 //! use buqueue_memory::{MemoryBackend, MemoryConfig};
 //! use buqueue_core::prelude::*;
 //!
-//! let (producer, consumer) = MemoryBackend::builder(MemoryConfig::default())
-//!     .build_par()
+//! let (producer, mut consumer) = MemoryBackend::builder(MemoryConfig::default())
+//!     .build_pair()
 //!     .await
 //!     .unwrap();
 //!   
@@ -32,10 +32,18 @@
 #![warn(missing_docs)]
 #![forbid(unsafe_code)]
 
-pub mod ack;
+pub mod builder;
 pub mod config;
+pub mod consumer;
 pub mod producer;
-pub(crate) mod envelope;
 
+mod ack;
+mod envelope;
 
+#[cfg(test)]
+mod tests;
+
+pub use builder::{MemoryBackend, MemoryBuilder};
 pub use config::MemoryConfig;
+pub use consumer::MemoryConsumer;
+pub use producer::MemoryProducer;

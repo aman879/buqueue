@@ -153,12 +153,15 @@ pub trait QueueConsumer: Send {
     where
         Self: Sized + 'static,
     {
-        stream::unfold(self, |mut consumer| async move {
-            if consumer.shutdown_handle().is_shutdown() {
+        stream::unfold((self, false), |(mut consumer, errored)| async move {
+            if errored {
                 return None;
             }
-            let item = consumer.receive().await;
-            Some((item, consumer))
+            match consumer.receive_graceful().await {
+                Some(Ok(delivery)) => Some((Ok(delivery), (consumer, false))),
+                Some(Err(e)) => Some((Err(e), (consumer, true))),
+                None => None,
+            }
         })
     }
 

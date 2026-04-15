@@ -1,6 +1,6 @@
 //! Internal state management for the memory backend
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use buqueue_core::dlq::DlqConfig;
 use bytes::Bytes;
@@ -17,16 +17,13 @@ pub(crate) struct Envelope {
     #[allow(dead_code)]
     pub(crate) payload: Bytes,
     #[allow(dead_code)]
-    pub(crate) header: HashMap<String, String>,
+    pub(crate) headers: HashMap<String, String>,
     #[allow(dead_code)]
     pub(crate) routing_key: Option<String>,
     /// Starts as 1, increment on each nack'd cycle
     pub(crate) delivery_count: u32,
     #[allow(dead_code)]
     pub(crate) first_delivered: DateTime<Utc>,
-    #[allow(dead_code)]
-    /// If `Some`, the consumer will sleep until this time before delivering
-    pub(crate) delivery_at: Option<DateTime<Utc>>,
 }
 
 /// Mutable state shared between the producer and the ack handle
@@ -38,4 +35,27 @@ pub(crate) struct SharedState {
     pub(crate) dlq_tx: Option<mpsc::Sender<Envelope>>,
     /// How many times each message ID has been nack'd
     pub(crate) nack_counts: HashMap<String, u32>,
+    /// Schedules messages not yet due for delivery
+    ///
+    /// Using `Vec<Envelop>` per key handles the case of
+    /// two messages scheduled for the exact same millisecond
+    pub(crate) scheduled: BTreeMap<DateTime<Utc>, Vec<Envelope>>,
+}
+
+impl SharedState {
+    /// Drain all scheduled envelopes whose `deliver_at <= now` and send them
+    /// into `tx`. Called by the consumer before each receive/`try_receive`
+    pub(crate) async fn flush_due_scheduled(&mut self, tx: &mpsc::Sender<Envelope>) {
+        let now = Utc::now();
+
+        let remaining = self
+            .scheduled
+            .split_off(&(now + chrono::Duration::nanoseconds(1)));
+        let due = std::mem::replace(&mut self.scheduled, remaining);
+        for (_delivery_at, envelopes) in due {
+            for envelope in envelopes {
+                let _ = tx.send(envelope).await;
+            }
+        }
+    }
 }
