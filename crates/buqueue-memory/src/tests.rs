@@ -516,7 +516,6 @@ async fn messages_ack_removes_messages() {
     );
 }
 
-
 #[tokio::test]
 async fn messages_stop_on_shutdown() {
     use futures::StreamExt;
@@ -744,14 +743,11 @@ async fn messages_sees_scheduled_messages_when_due() {
 
     let mut messages = consumer.messages().await.unwrap();
 
-    let d = tokio::time::timeout(
-        tokio::time::Duration::from_millis(300),
-        messages.next(),
-    )
-    .await
-    .expect("messages stream should yield once scheduled message becomes due")
-    .unwrap()
-    .unwrap();
+    let d = tokio::time::timeout(tokio::time::Duration::from_millis(300), messages.next())
+        .await
+        .expect("messages stream should yield once scheduled message becomes due")
+        .unwrap()
+        .unwrap();
 
     assert_eq!(d.payload_json::<u32>().unwrap(), 7);
     d.ack().await.unwrap();
