@@ -25,7 +25,10 @@
 
 use std::pin::Pin;
 
-use futures::{Stream, StreamExt, stream::{self, BoxStream}};
+use futures::{
+    Stream, StreamExt,
+    stream::{self, BoxStream},
+};
 
 use crate::prelude::{BuqueueResult, Delivery, ShutdownHandle};
 
@@ -239,8 +242,9 @@ macro_rules! ref_delefate {
 
             fn messages(
                 &mut self,
-            ) -> impl Future<Output = BuqueueResult<impl Stream<Item = BuqueueResult<Delivery>> + Send + '_>>
-            + Send {
+            ) -> impl Future<
+                Output = BuqueueResult<impl Stream<Item = BuqueueResult<Delivery>> + Send + '_>,
+            > + Send {
                 (**self).messages()
             }
         }
@@ -319,8 +323,8 @@ impl<C: QueueConsumer> ErasedQueueConsumer for DynConsumerInner<C> {
     }
 
     fn messages<'a>(
-            &'a mut self,
-        ) -> Pin<Box<dyn Future<Output = BuqueueResult<MessageStream<'a>>> + Send + 'a>> {
+        &'a mut self,
+    ) -> Pin<Box<dyn Future<Output = BuqueueResult<MessageStream<'a>>> + Send + 'a>> {
         Box::pin(async move {
             let stream = self.inner.messages().await?;
             Ok(Box::pin(stream) as BoxStream<'a, BuqueueResult<Delivery>>)
@@ -388,9 +392,9 @@ impl<'a> BaseDynConsumer<'a> {
     }
 
     /// Returns an async stream of messages from this consumer
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Return Error emitted by backend
     pub async fn messages(&mut self) -> BuqueueResult<BoxStream<'_, BuqueueResult<Delivery>>> {
         self.0.messages().await
