@@ -6,6 +6,7 @@ use buqueue_core::{
     error::{BuqueueError, BuqueueResult, ErrorKind},
     prelude::{Delivery, QueueConsumer, ShutdownHandle},
 };
+use chrono::Utc;
 use tokio::sync::{Mutex, mpsc};
 
 use crate::{
@@ -60,21 +61,45 @@ impl MemoryConsumer {
 
 impl QueueConsumer for MemoryConsumer {
     async fn receive(&mut self) -> BuqueueResult<Delivery> {
-        if self.shutdown.is_shutdown() {
-            return Err(BuqueueError::new(ErrorKind::ConsumerShutdown));
-        }
-
-        // deal with now-due scheduled message into the channel before polling
-        self.flush_scheduled().await;
-
-        tokio::select! {
-            biased;
-            envelope = self.rx.recv() => {
-                let envelope = envelope.ok_or_else(|| BuqueueError::new(ErrorKind::ConnectionLost))?;
-                Ok(self.make_delivery(envelope))
+        loop {
+            if self.shutdown.is_shutdown() {
+                return Err(BuqueueError::new(ErrorKind::ConsumerShutdown));
             }
-            _ = self.liveness_rx.recv() => {
-                Err(BuqueueError::new(ErrorKind::ConnectionLost))
+
+            // deal with now-due scheduled message into the channel before polling
+            self.flush_scheduled().await;
+
+            if let Ok(envelope) = self.rx.try_recv() {
+                return Ok(self.make_delivery(envelope));
+            }
+
+            let next_due = self.shared.lock().await.next_scheduled_at();
+
+            let delay = next_due.map(|at| {
+                (at - Utc::now())
+                    .to_std()
+                    .unwrap_or(std::time::Duration::ZERO)
+            });
+
+            tokio::select! {
+                biased;
+                envelope = self.rx.recv() => {
+                    let envelope = envelope.ok_or_else(|| BuqueueError::new(ErrorKind::ConnectionLost))?;
+                    return Ok(self.make_delivery(envelope));
+                }
+                // The timer branch
+                () = async {
+                    match delay {
+                        Some(d) => tokio::time::sleep(d).await,
+                        None => std::future::pending().await,
+                    }
+                } => {
+                    // We do nothing here.
+                    // The loop will naturally restart and call flush_scheduled() at the top.
+                }
+                _ = self.liveness_rx.recv() => {
+                    return Err(BuqueueError::new(ErrorKind::ConnectionLost));
+                }
             }
         }
     }

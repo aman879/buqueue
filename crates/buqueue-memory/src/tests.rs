@@ -3,6 +3,8 @@
 //! Every public API behaviour is covered here. These tests are also the
 //! canonical examples of how to use buqueue-memory
 
+use std::vec;
+
 use buqueue_core::{
     backend::BackendBuilder,
     dlq::DlqConfig,
@@ -407,6 +409,355 @@ async fn stream_for_each_concurrent() {
 }
 
 #[tokio::test]
+async fn messages_yeild_messages() {
+    use futures::StreamExt;
+
+    let (producer, mut consumer) = make_pair().await;
+
+    producer
+        .send(Message::from_json(&"hello").unwrap())
+        .await
+        .unwrap();
+
+    let mut messages = consumer.messages().await.unwrap();
+
+    let message = messages.next().await.unwrap().unwrap();
+    let value = message.payload_json::<String>().unwrap();
+    assert_eq!(value, "hello".to_string());
+}
+
+#[tokio::test]
+async fn messages_yeild_messages_in_order() {
+    use futures::StreamExt;
+
+    let (producer, mut consumer) = make_pair().await;
+
+    for i in 0u32..5 {
+        producer
+            .send(Message::from_json(&i).unwrap())
+            .await
+            .unwrap();
+    }
+
+    let mut messages = consumer.messages().await.unwrap();
+
+    let mut values = Vec::new();
+    for _ in 0..5 {
+        let result = messages.next().await.unwrap().unwrap();
+        let val: u32 = result.payload_json().unwrap();
+        values.push(val);
+    }
+
+    assert_eq!(values, vec![0, 1, 2, 3, 4]);
+}
+
+#[tokio::test]
+async fn messages_end_when_producer_dropped() {
+    use futures::StreamExt;
+
+    let (producer, mut consumer) = make_pair().await;
+
+    for i in 0u32..5 {
+        producer
+            .send(Message::from_json(&i).unwrap())
+            .await
+            .unwrap();
+    }
+
+    drop(producer);
+
+    let messages = consumer.messages().await.unwrap();
+
+    let (values, errors): (Vec<_>, Vec<_>) = messages
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .partition(Result::is_ok);
+
+    let values: Vec<u32> = values
+        .into_iter()
+        .map(|r| r.unwrap().payload_json::<u32>().unwrap())
+        .collect();
+
+    assert_eq!(values, vec![0, 1, 2, 3, 4], "all sent messages must arrive");
+    assert_eq!(
+        errors.len(),
+        1,
+        "exactly one ConnnectionLost error closes the stream"
+    );
+}
+
+#[tokio::test]
+async fn messages_ack_removes_messages() {
+    use futures::StreamExt;
+
+    let (producer, mut consumer) = make_pair().await;
+
+    for i in 0u32..5 {
+        producer
+            .send(Message::from_json(&i).unwrap())
+            .await
+            .unwrap();
+    }
+
+    let messages = consumer.messages().await.unwrap();
+
+    let deliveries: Vec<_> = messages.take(5).map(|r| r.unwrap()).collect().await;
+
+    assert_eq!(deliveries.len(), 5);
+
+    for d in deliveries {
+        d.ack().await.unwrap();
+    }
+
+    assert!(
+        consumer.try_receive().await.unwrap().is_none(),
+        "queue should be empty after all streamed messages are ack'd"
+    );
+}
+
+
+#[tokio::test]
+async fn messages_stop_on_shutdown() {
+    use futures::StreamExt;
+
+    let (_producer, mut consumer) = make_pair().await;
+    let shutdown = consumer.shutdown_handle();
+
+    tokio::spawn(async move {
+        tokio::time::sleep(tokio::time::Duration::from_millis(30)).await;
+        shutdown.shutdown();
+    });
+
+    let mut messages = consumer.messages().await.unwrap();
+
+    let result = tokio::time::timeout(
+        tokio::time::Duration::from_millis(200),
+        messages.by_ref().collect::<Vec<_>>(),
+    )
+    .await;
+
+    assert!(
+        result.is_ok(),
+        "messages stream should terminate after shutdown signal"
+    );
+    assert!(
+        result.unwrap().is_empty(),
+        "no messages were sent so stream yields nothing"
+    );
+}
+
+#[tokio::test]
+async fn messages_stop_on_shutdown_after_partial_consume() {
+    use futures::StreamExt;
+
+    let (producer, mut consumer) = make_pair().await;
+    let shutdown = consumer.shutdown_handle();
+
+    for i in 0u32..10 {
+        producer
+            .send(Message::from_json(&i).unwrap())
+            .await
+            .unwrap();
+    }
+
+    tokio::spawn(async move {
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+        shutdown.shutdown();
+    });
+
+    let mut messages = consumer.messages().await.unwrap();
+
+    let received: Vec<u32> = tokio::time::timeout(
+        tokio::time::Duration::from_millis(300),
+        messages
+            .by_ref()
+            .map(|r| r.unwrap())
+            .then(|d| async move {
+                let val = d.payload_json::<u32>().unwrap();
+                d.ack().await.unwrap();
+                val
+            })
+            .collect::<Vec<_>>(),
+    )
+    .await
+    .expect("messages stream should terminate after shutdown");
+
+    assert!(
+        !received.is_empty(),
+        "at least one message should have been received"
+    );
+    assert!(received.len() <= 10);
+
+    let expected: Vec<u32> = (0..u32::try_from(received.len()).unwrap()).collect();
+    assert_eq!(received, expected);
+}
+
+#[tokio::test]
+async fn messages_for_each_concurrent() {
+    use futures::StreamExt;
+    use std::sync::{Arc, Mutex};
+
+    const MSG_COUNT: u32 = 20;
+    let (producer, mut consumer) = make_pair().await;
+
+    for i in 0..MSG_COUNT {
+        producer
+            .send(Message::from_json(&i).unwrap())
+            .await
+            .unwrap();
+    }
+
+    let received = Arc::new(Mutex::new(Vec::<u32>::new()));
+    let received_clone = Arc::clone(&received);
+
+    let mut messages = consumer.messages().await.unwrap();
+
+    messages
+        .by_ref()
+        .take(MSG_COUNT as usize)
+        .for_each_concurrent(4, |result| {
+            let received_ref = Arc::clone(&received_clone);
+            async move {
+                let delivery = result.unwrap();
+                let val = delivery.payload_json::<u32>().unwrap();
+                delivery.ack().await.unwrap();
+                received_ref.lock().unwrap().push(val);
+            }
+        })
+        .await;
+
+    let mut values = received.lock().unwrap().clone();
+    values.sort_unstable();
+
+    let expected: Vec<u32> = (0..MSG_COUNT).collect();
+    assert_eq!(
+        values, expected,
+        "every message must be received exactly once"
+    );
+}
+
+#[tokio::test]
+async fn messages_stream_can_be_dropped_and_consumer_reused() {
+    use futures::StreamExt;
+
+    let (producer, mut consumer) = make_pair().await;
+
+    for i in 0u32..5 {
+        producer
+            .send(Message::from_json(&i).unwrap())
+            .await
+            .unwrap();
+    }
+
+    {
+        let mut messages = consumer.messages().await.unwrap();
+
+        let first_two: Vec<u32> = messages
+            .by_ref()
+            .take(2)
+            .map(|r| r.unwrap().payload_json::<u32>().unwrap())
+            .collect()
+            .await;
+
+        assert_eq!(first_two, vec![0, 1]);
+    }
+
+    let d = consumer.receive().await.unwrap();
+    assert_eq!(d.payload_json::<u32>().unwrap(), 2);
+    d.ack().await.unwrap();
+}
+
+#[tokio::test]
+async fn messages_stream_can_be_recreated_on_same_consumer() {
+    use futures::StreamExt;
+
+    let (producer, mut consumer) = make_pair().await;
+
+    for i in 0u32..6 {
+        producer
+            .send(Message::from_json(&i).unwrap())
+            .await
+            .unwrap();
+    }
+
+    let first_batch = {
+        let mut messages = consumer.messages().await.unwrap();
+        messages
+            .by_ref()
+            .take(3)
+            .map(|r| r.unwrap().payload_json::<u32>().unwrap())
+            .collect::<Vec<_>>()
+            .await
+    };
+
+    let second_batch = {
+        let mut messages = consumer.messages().await.unwrap();
+        messages
+            .by_ref()
+            .take(3)
+            .map(|r| r.unwrap().payload_json::<u32>().unwrap())
+            .collect::<Vec<_>>()
+            .await
+    };
+
+    assert_eq!(first_batch, vec![0, 1, 2]);
+    assert_eq!(second_batch, vec![3, 4, 5]);
+}
+
+#[tokio::test]
+async fn messages_nack_requeues_with_incremented_count() {
+    use futures::StreamExt;
+
+    let (producer, mut consumer) = make_pair().await;
+
+    producer
+        .send(Message::from_json(&99u32).unwrap())
+        .await
+        .unwrap();
+
+    let mut messages = consumer.messages().await.unwrap();
+
+    let d1 = messages.next().await.unwrap().unwrap();
+    assert_eq!(d1.delivery_count(), 1);
+    d1.nack().await.unwrap();
+
+    drop(messages);
+
+    let d2 = consumer.receive().await.unwrap();
+    assert_eq!(d2.delivery_count(), 2);
+    assert_eq!(d2.payload_json::<u32>().unwrap(), 99);
+    d2.ack().await.unwrap();
+}
+
+#[tokio::test]
+async fn messages_sees_scheduled_messages_when_due() {
+    use futures::StreamExt;
+
+    let (producer, mut consumer) = make_pair().await;
+
+    let delivery_at = Utc::now() + chrono::Duration::milliseconds(100);
+    producer
+        .send_at(Message::from_json(&7u32).unwrap(), delivery_at)
+        .await
+        .unwrap();
+
+    let mut messages = consumer.messages().await.unwrap();
+
+    let d = tokio::time::timeout(
+        tokio::time::Duration::from_millis(300),
+        messages.next(),
+    )
+    .await
+    .expect("messages stream should yield once scheduled message becomes due")
+    .unwrap()
+    .unwrap();
+
+    assert_eq!(d.payload_json::<u32>().unwrap(), 7);
+    d.ack().await.unwrap();
+}
+
+#[tokio::test]
 async fn dyn_procducer_and_consumer_work() {
     let (producer, mut consumer) = MemoryBackend::builder(MemoryConfig::default())
         .make_dynamic()
@@ -421,4 +772,33 @@ async fn dyn_procducer_and_consumer_work() {
     let delivery = consumer.receive().await.unwrap();
     assert_eq!(delivery.payload_json::<u32>().unwrap(), 777);
     delivery.ack().await.unwrap();
+}
+
+#[tokio::test]
+async fn dyn_consumer_messages_work() {
+    use futures::StreamExt;
+
+    let (producer, mut consumer) = MemoryBackend::builder(MemoryConfig::default())
+        .make_dynamic()
+        .build_pair()
+        .await
+        .unwrap();
+
+    for i in 0u32..3 {
+        producer
+            .send(Message::from_json(&i).unwrap())
+            .await
+            .unwrap();
+    }
+
+    let mut messages = consumer.messages().await.unwrap();
+
+    let values: Vec<u32> = messages
+        .by_ref()
+        .take(3)
+        .map(|r| r.unwrap().payload_json::<u32>().unwrap())
+        .collect()
+        .await;
+
+    assert_eq!(values, vec![0, 1, 2]);
 }
