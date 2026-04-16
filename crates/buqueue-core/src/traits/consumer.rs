@@ -23,11 +23,12 @@
 //! The `ref_delegate!` macro therefore can only covers `Box<T>` and `&mut T`,
 //! not `Arc<T>`.
 
-use std::pin::Pin;
-
-use futures::{Stream, stream};
-
 use crate::prelude::{BuqueueResult, Delivery, ShutdownHandle};
+use futures::{
+    Stream, StreamExt,
+    stream::{self, BoxStream},
+};
+use std::pin::Pin;
 
 // -------- QueueConsumer ------------------------------
 
@@ -136,6 +137,26 @@ pub trait QueueConsumer: Send {
         }
     }
 
+    /// Returns an async stream of messages from this consumer
+    /// This method borrows `&mut self`, allowing the consumer to be used again
+    /// after the stream is dropped
+    fn messages(
+        &mut self,
+    ) -> impl Future<Output = BuqueueResult<impl Stream<Item = BuqueueResult<Delivery>> + Send + '_>>
+    + Send {
+        async move {
+            let stream = stream::try_unfold(self, |consumer| async {
+                match consumer.receive_graceful().await {
+                    Some(Ok(delivery)) => Ok(Some((delivery, consumer))),
+                    Some(Err(e)) => Err(e),
+                    None => Ok(None),
+                }
+            });
+
+            Ok(stream.boxed())
+        }
+    }
+
     /// Convert this consumer into an async `Stream` of deliverie
     ///
     /// Consumes `self`. Implemented with `futures::stream::unfold`, no unsafe
@@ -153,12 +174,12 @@ pub trait QueueConsumer: Send {
     where
         Self: Sized + 'static,
     {
-        stream::unfold(self, |mut consumer| async move {
-            if consumer.shutdown_handle().is_shutdown() {
-                return None;
+        stream::try_unfold(self, |mut consumer| async move {
+            match consumer.receive_graceful().await {
+                Some(Ok(delivery)) => Ok(Some((delivery, consumer))),
+                Some(Err(e)) => Err(e),
+                None => Ok(None),
             }
-            let item = consumer.receive().await;
-            Some((item, consumer))
         })
     }
 
@@ -216,6 +237,14 @@ macro_rules! ref_delefate {
             ) -> impl Future<Output = Option<BuqueueResult<Delivery>>> + Send {
                 (**self).receive_graceful()
             }
+
+            fn messages(
+                &mut self,
+            ) -> impl Future<
+                Output = BuqueueResult<impl Stream<Item = BuqueueResult<Delivery>> + Send + '_>,
+            > + Send {
+                (**self).messages()
+            }
         }
     };
 }
@@ -227,6 +256,8 @@ ref_delefate!(T, Box<T>);
 //
 // The dyn-compatible bridge. Same reasoning as ErasedQueueProducer.
 // into_stream and into_dyn are excluded, both require Self: Sized
+
+type MessageStream<'a> = BoxStream<'a, BuqueueResult<Delivery>>;
 
 pub(crate) trait ErasedQueueConsumer: Send {
     fn receive<'a>(
@@ -247,6 +278,10 @@ pub(crate) trait ErasedQueueConsumer: Send {
     fn receive_graceful<'a>(
         &'a mut self,
     ) -> Pin<Box<dyn Future<Output = Option<BuqueueResult<Delivery>>> + Send + 'a>>;
+
+    fn messages<'a>(
+        &'a mut self,
+    ) -> Pin<Box<dyn Future<Output = BuqueueResult<MessageStream<'a>>> + Send + 'a>>;
 }
 
 // --- DynConsumerInner ------------------
@@ -283,6 +318,15 @@ impl<C: QueueConsumer> ErasedQueueConsumer for DynConsumerInner<C> {
         &'a mut self,
     ) -> Pin<Box<dyn Future<Output = Option<BuqueueResult<Delivery>>> + Send + 'a>> {
         Box::pin(self.inner.receive_graceful())
+    }
+
+    fn messages<'a>(
+        &'a mut self,
+    ) -> Pin<Box<dyn Future<Output = BuqueueResult<MessageStream<'a>>> + Send + 'a>> {
+        Box::pin(async move {
+            let stream = self.inner.messages().await?;
+            Ok(Box::pin(stream) as BoxStream<'a, BuqueueResult<Delivery>>)
+        })
     }
 }
 
@@ -343,6 +387,15 @@ impl<'a> BaseDynConsumer<'a> {
     /// Like `receive`, but returns `None` after shutdown is signalled
     pub async fn receive_graceful(&mut self) -> Option<BuqueueResult<Delivery>> {
         self.0.receive_graceful().await
+    }
+
+    /// Returns an async stream of messages from this consumer
+    ///
+    /// # Errors
+    ///
+    /// Return Error emitted by backend
+    pub async fn messages(&mut self) -> BuqueueResult<BoxStream<'_, BuqueueResult<Delivery>>> {
+        self.0.messages().await
     }
 }
 
