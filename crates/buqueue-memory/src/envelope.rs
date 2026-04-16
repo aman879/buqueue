@@ -45,7 +45,7 @@ pub(crate) struct SharedState {
 impl SharedState {
     /// Returns the timestamp of the earliest scheduled message, if any
     pub(crate) fn next_scheduled_at(&self) -> Option<DateTime<Utc>> {
-        self.scheduled.keys().next().copied()    
+        self.scheduled.keys().next().copied()
     }
 
     /// Drain all scheduled envelopes whose `deliver_at <= now` and send them

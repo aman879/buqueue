@@ -23,14 +23,12 @@
 //! The `ref_delegate!` macro therefore can only covers `Box<T>` and `&mut T`,
 //! not `Arc<T>`.
 
+use crate::prelude::{BuqueueResult, Delivery, ShutdownHandle};
 use std::pin::Pin;
-
 use futures::{
     Stream, StreamExt,
     stream::{self, BoxStream},
 };
-
-use crate::prelude::{BuqueueResult, Delivery, ShutdownHandle};
 
 // -------- QueueConsumer ------------------------------
 
