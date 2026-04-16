@@ -24,11 +24,11 @@
 //! not `Arc<T>`.
 
 use crate::prelude::{BuqueueResult, Delivery, ShutdownHandle};
-use std::pin::Pin;
 use futures::{
     Stream, StreamExt,
     stream::{self, BoxStream},
 };
+use std::pin::Pin;
 
 // -------- QueueConsumer ------------------------------
 
