@@ -1,0 +1,19 @@
+[package]
+name = "buqueue-sqs"
+version = "0.1.0"
+edition.workspace = true
+description = "AWS SQS backend for buqueue"
+license = "MIT"
+
+[dependencies]
+buqueue-core = { workspace = true }
+tokio = { workspace = true }
+bytes = { workspace = true }
+
+
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[lints]
+workspace = true

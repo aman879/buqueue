@@ -1,0 +1,1 @@
+//! SQS backend configuration

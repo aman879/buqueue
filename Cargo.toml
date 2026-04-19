@@ -1,7 +1,9 @@
 [workspace]
 members = [
+    "crates/buqueue",
     "crates/buqueue-core",
     "crates/buqueue-memory",
+    "crates/buqueue-sqs",
 ]
 
 resolver = "3"
@@ -11,6 +13,7 @@ edition="2024"
 
 [workspace.dependencies]
 buqueue-core = { path = "crates/buqueue-core" }
+buqueue-memory = { path = "crates/buqueue-memory" }
 thiserror = { version = "2.0.18" }
 bytes = "1.11.1"
 serde = { version = "1.0.228", features = ["derive"] }
