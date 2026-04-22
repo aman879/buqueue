@@ -36,6 +36,7 @@
 #![forbid(unsafe_code)]
 pub mod backend;
 pub mod config;
+pub mod error;
 
 #[cfg(test)]
 mod tests;

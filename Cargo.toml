@@ -24,6 +24,8 @@ tracing = "0.1.44"
 futures = "0.3.32"
 uuid = { version = "1.23.0", features = ["v4"] }
 tokio-test = "0.4.5"
+aws-config = "1.8.16"
+aws-sdk-sqs = "1.98.0"
 
 [workspace.lints.rust]
 missing_docs = "warn"
