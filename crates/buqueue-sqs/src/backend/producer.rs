@@ -145,7 +145,9 @@ impl QueueProducer for SqsProducer {
     ) -> BuqueueResult<MessageId> {
         let now = Utc::now();
         let delay = if delivery_at > now {
-            (delivery_at - now).to_std().unwrap_or(std::time::Duration::ZERO)
+            (delivery_at - now)
+                .to_std()
+                .unwrap_or(std::time::Duration::ZERO)
         } else {
             std::time::Duration::ZERO
         };
@@ -162,7 +164,8 @@ impl QueueProducer for SqsProducer {
 
         let body = payload_to_str(&message)?;
 
-        let mut req = self.client
+        let mut req = self
+            .client
             .send_message()
             .queue_url(self.config.queue_url.as_str())
             .message_body(body)
