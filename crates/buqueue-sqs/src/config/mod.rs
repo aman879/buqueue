@@ -5,30 +5,30 @@ use std::{fmt, time::Duration};
 use aws_config::Region;
 
 /// A valiadated SQS queue URL
-/// 
+///
 /// Wraps the raw URL string to prevent accedentally passing a region, or
 /// other string where a queue URL is required. Also centralises FIFO
 /// detection, any code that has a `QueueUrl` can call `.is_fifo()` witouth
 /// inspecting raw string.
-/// 
+///
 /// ## Format
-/// 
+///
 /// ```text
 /// https://sqs.{region}.amazonaws.com/{account-id}/{queue-name}
 /// https://sqs.{region}.amazonaws.com/{account-id}/{queue-name}.fifo
-/// 
+///
 /// # LocalStack
 /// http://localhost:4566/123456789/{queue_name}
 /// ```
-/// 
+///
 /// ## Construction
-/// 
+///
 /// ```rust
 /// use buqueue_sqs::config::QueueUrl;
-/// 
+///
 /// let url = QueueUrl::new("https://sqs.us-east-1.amazonaws.com/123456789/orders");
 /// assert!(!url.is_fifo());
-/// 
+///
 /// let fifo = QueueUrl::new("https://sqs.us-east-1.amazonaws.com/123456789/orders.fifo");
 /// assert!(fifo.is_fifo());
 /// ```
@@ -43,7 +43,7 @@ impl QueueUrl {
     }
 
     /// Returns `true` if this is a FIFO queue (URL ends in `.fifo`).
-    /// 
+    ///
     /// SQS FIFO queues always have this suffix, it is enforced by AWS
     #[allow(clippy::case_sensitive_file_extension_comparisons)]
     #[must_use]
@@ -87,13 +87,14 @@ impl AsRef<str> for QueueUrl {
 /// SQS receipt handles are long, URL-encoded strings that identify a specific
 /// delivery of a message. They are not the same as the message ID, a new handle
 /// is issued every time SQS devliers the message
-/// 
+///
 /// Making this a newtype prevents accidentally passing a `message_id` or queue
 /// URL where a receipt handle is required, since all three are `String` in the
 /// raw SDK type
 #[derive(Debug, Clone)]
 pub struct ReceiptHandle(pub(crate) String);
 
+#[allow(dead_code)]
 impl ReceiptHandle {
     pub(crate) fn new(s: impl Into<String>) -> Self {
         Self(s.into())
@@ -116,33 +117,33 @@ impl fmt::Display for ReceiptHandle {
 }
 
 /// Configuration for the SQS backend
-/// 
+///
 /// ## Credentials
-/// 
+///
 /// Never put credentials in this struct. The AWS SDK reads them from:
 /// 1. `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` environment vaiables
 /// 2. `~/.aws/credentials` file
 /// 3. IAM instance/task role (EC2, ECS, lambda)
-/// 
+///
 /// For Localstack, set `endpoint_url` and the SDK will use whatever
 /// dummy credentials are in the environment
-/// 
+///
 /// ## Queue mode detection
-/// 
+///
 /// The queue mode (Standard bs FIFO) is detected automatically from the
 /// `queue_url`, FIFO queues always end in `.fifo`. You do not need to
 /// set it explicitly
-/// 
+///
 /// ## Example
-/// 
+///
 /// ```rust,ignore
 /// use buqueue_sqs::config::{SqsConfig, QueueUrl};
-/// 
+///
 /// let config = SqsConfig {
 ///     queue_url: QueueUrl::new("https://sqs.us-east-1.amazonaws.com/123456789/orders"),
 ///     ..Default::default()
 /// };
-/// 
+///
 /// // LocalStack:
 /// let config = SqsConfig {
 ///     queue_url: QueueUrl::new("http://localhost:4556/123456789/orders"),
@@ -161,18 +162,18 @@ pub struct SqsConfig {
     pub region: Region,
 
     /// Override the SQS endpoint URL
-    /// 
-    /// Set to "http://localhost:4566" for `LocalStack``.
+    ///
+    /// Set to `"http://localhost:4566"` for `LocalStack`.
     /// Leave `None` for real AWS
     pub endpoint_url: Option<String>,
 
     /// How long SQS hides a received messafe from other consumer.
-    /// 
+    ///
     /// Defaults to `VisibilityTimeout::Seconds(30)`. Maximum is 43200s (12h)
     pub visibility_timeout: VisibilityTimeout,
 
     /// How long `receive()` waits before returning empty
-    /// 
+    ///
     /// Values 1-20 seconds, Higer = fewer empty responses = lower cost
     /// Default to 20 seconds
     pub wait_time_seconds: u32,
@@ -213,14 +214,15 @@ impl VisibilityTimeout {
     /// Returns the timeout as a `Duration`
     #[must_use]
     pub fn as_duration(&self) -> Duration {
-        Duration::from_secs(self.as_secs() as u64)
+        Duration::from_secs(u64::from(self.as_secs()))
     }
 }
 
 /// SQS specific metadata attached to each received message
-/// 
+///
 /// Used internally by `SqsAckHandle`, not exposed to users directly
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub(crate) struct SqsMessagMeta {
     /// Typed receipt handle, required for `DeleteMessage` and `ChangeMessageVisibility`
     pub(crate) receipt_handle: ReceiptHandle,
@@ -244,7 +246,10 @@ mod tests {
     #[test]
     fn queue_url_display() {
         let url = QueueUrl::new("https://sqs.us-east-1.amazonaws.com/123/orders");
-        assert_eq!(url.to_string(), "https://sqs.us-east-1.amazonaws.com/123/orders");
+        assert_eq!(
+            url.to_string(),
+            "https://sqs.us-east-1.amazonaws.com/123/orders"
+        );
     }
 
     #[test]
