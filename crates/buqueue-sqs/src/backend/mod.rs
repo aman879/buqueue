@@ -1,4 +1,5 @@
 //! Builder and backend entry point for the SQS backend
 
-pub mod producer;
+pub mod ack;
 pub mod consumer;
+pub mod producer;
